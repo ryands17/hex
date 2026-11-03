@@ -34,7 +34,8 @@ pub struct Parakeet {
     _weights: procwatch::Lease,
 }
 
-/// Loaded model weights, estimated from the model file size (they live in Metal buffers).
+/// Loaded model weights, estimated from the model file size (they live in Metal
+/// buffers, or CPU memory on an Intel Mac).
 static MODEL_WEIGHTS: procwatch::Gauge = procwatch::Gauge::new("speech.model_weights");
 static TRANSCRIBE_LOGGING: Once = Once::new();
 #[cfg(hex_capture)]
@@ -1246,10 +1247,16 @@ impl Parakeet {
         } else {
             transcribe_cpp::disable_logging();
         }
+        // Intel Macs have no Apple GPU that ggml's Metal backend supports
+        // well, so they run on the CPU (#953). Apple silicon runs on Metal only.
+        #[cfg(target_arch = "x86_64")]
+        let backend = Backend::Cpu;
+        #[cfg(not(target_arch = "x86_64"))]
+        let backend = Backend::Metal;
         let model = Model::load_with(
             model_path,
             &ModelOptions {
-                backend: Backend::Metal,
+                backend,
                 ..Default::default()
             },
         )
@@ -1260,7 +1267,7 @@ impl Parakeet {
             )
         })?;
         let device = model.device()?;
-        if device.kind != "metal" {
+        if cfg!(not(target_arch = "x86_64")) && device.kind != "metal" {
             return Err(eyre!(
                 "transcription model selected {} ({}) instead of Metal",
                 device.kind,

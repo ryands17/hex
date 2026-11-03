@@ -194,8 +194,14 @@ public func hexAppleIntelligenceAvailability() -> Int32 {
 @_cdecl("hex_apple_intelligence_context_size")
 public func hexAppleIntelligenceContextSize() -> Int {
     #if canImport(FoundationModels)
+    // Apple Intelligence never runs on an Intel Mac, and the macOS 26.2 SDK
+    // has no `contextSize`, so the Intel build does not reference it.
+    #if arch(x86_64)
+    return 0
+    #else
     guard #available(macOS 26.0, *) else { return 0 }
     return SystemLanguageModel.default.contextSize
+    #endif
     #else
     return 0
     #endif
